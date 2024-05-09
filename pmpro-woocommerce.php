@@ -112,6 +112,10 @@ function pmprowoo_is_purchasable( $is_purchasable, $product ) {
 	// This group only allows users to have one level from the group.
 	// Check if the cart already has a membership product for this group.
 	$products_in_cart = pmprowoo_get_memberships_from_cart();
+	//Get current logged in user
+	$current_user = wp_get_current_user();
+	//get levels from current user
+	$user_levels = pmpro_getMembershipLevelsForUser( $current_user->ID );
 	foreach ( $products_in_cart as $product_id ) {
 		// If this is not a product level, continue.
 		if ( ! array_key_exists( $product_id, $pmprowoo_product_levels ) ) {
@@ -124,13 +128,21 @@ function pmprowoo_is_purchasable( $is_purchasable, $product ) {
 			continue;
 		}
 
-		// If the group ID in the cart matches the group ID of the product we are viewing, let's disable the purchase.
-		if ( (int)$group_id_in_cart === (int)$group_id ) {
-			add_action( 'woocommerce_single_product_summary', 'pmprowoo_purchase_disabled' );
-			return false;
+		//Bail If users levels is empty
+		if ( empty( $user_levels ) ) {
+			return $is_purchasable;
+		}
+		//Let's iterate over users levels and check if they have a level in the same group
+		foreach ( $user_levels as $user_level ) {
+			$group_id_user = pmpro_get_group_id_for_level( $user_level->id );
+			// If the user has another level in the same group, we need to disable purchasing this product.
+			if ( (int)$group_id_user === (int)$group_id && $pmprowoo_product_levels[ $product_id ] !== $user_level->id ) {
+				add_action( 'woocommerce_single_product_summary', 'pmprowoo_purchase_disabled' );
+				return false;
+			}
 		}
 	}
-	
+
 	return $is_purchasable;
 }
 add_filter( 'woocommerce_is_purchasable', 'pmprowoo_is_purchasable', 10, 2 );
